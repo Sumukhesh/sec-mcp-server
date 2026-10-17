@@ -1,0 +1,63 @@
+spring:
+  application:
+    name: sec-mcp-server
+  main:
+    banner-mode: off
+  ai:
+    mcp:
+      server:
+        name: sec-mcp-server
+        version: 0.1.0
+        type: ASYNC            # tools return Mono<...>; nothing blocks Netty's event loop
+        capabilities:          # tools only; no resources/prompts/completions yet
+          resource: false
+          prompt: false
+          completion: false
+        instructions: >
+          Research US public companies using SEC EDGAR filings. Start with
+          search_company to resolve a name or ticker, then fetch sections or financials.
+  profiles:
+    default: stdio
+
+# Secrets (edgar.user-agent) live in ./config/application.yml (gitignored) or the
+# EDGAR_USER_AGENT environment variable. Never commit them.
+edgar:
+  user-agent: ${EDGAR_USER_AGENT:}       # required: "Your Name your@email.com"
+  www-base-url: https://www.sec.gov      # overridable only via config (WireMock tests),
+  data-base-url: https://data.sec.gov    # never by a tool caller
+  rate-limit-per-second: 8
+  request-timeout: 30s
+  retry:
+    max-attempts: 4
+    initial-backoff: 500ms
+    max-backoff: 8s
+  ticker-refresh-interval: 24h
+
+---
+spring:
+  config:
+    activate:
+      on-profile: stdio
+  main:
+    web-application-type: none           # no web server in stdio mode
+  ai:
+    mcp:
+      server:
+        stdio: true
+logging:
+  threshold:
+    console: OFF                         # stdout carries only MCP protocol messages
+  file:
+    name: ${java.io.tmpdir}/sec-mcp-server/server.log
+
+---
+spring:
+  config:
+    activate:
+      on-profile: http
+  ai:
+    mcp:
+      server:
+        protocol: STREAMABLE
+server:
+  port: 8080

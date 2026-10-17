@@ -1,0 +1,5 @@
+# Copy to config/application.yml (gitignored) and fill in your details.
+# Spring Boot loads ./config/application.yml automatically when run from the project root.
+# The SEC blocks requests without a User-Agent of the form "Your Name your@email.com".
+edgar:
+  user-agent: "REPLACE_ME your@email.com"
