@@ -79,6 +79,8 @@
     </dependencies>
 
     <build>
+        <!-- Stable jar name so the Claude Desktop config does not change with the version -->
+        <finalName>sec-mcp-server</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

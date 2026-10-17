@@ -20,6 +20,13 @@ spring:
   profiles:
     default: stdio
 
+logging:
+  level:
+    # Known-harmless Spring AI startup warnings: bean ordering inside its annotation scanner, and
+    # "no resource/prompt methods found" because this server only exposes tools.
+    org.springframework.context.support.PostProcessorRegistrationDelegate: ERROR
+    org.springframework.ai.mcp.annotation.provider: ERROR
+
 # Secrets (edgar.user-agent) live in ./config/application.yml (gitignored) or the
 # EDGAR_USER_AGENT environment variable. Never commit them.
 edgar:
@@ -46,11 +53,9 @@ spring:
     mcp:
       server:
         stdio: true
-logging:
-  threshold:
-    console: OFF                         # stdout carries only MCP protocol messages
+logging:                                 # see logback-spring.xml: file + WARN to stderr, nothing on stdout
   file:
-    name: ${java.io.tmpdir}/sec-mcp-server/server.log
+    name: ${SEC_MCP_LOG_FILE:${user.home}/.sec-mcp-server/logs/server.log}
 
 ---
 spring:
