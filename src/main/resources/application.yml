@@ -15,7 +15,8 @@ spring:
           completion: false
         instructions: >
           Research US public companies using SEC EDGAR filings. Start with
-          search_company to resolve a name or ticker, then fetch sections or financials.
+          search_company to resolve a name or ticker; use the accession numbers it
+          returns with the other tools.
   profiles:
     default: stdio
 
