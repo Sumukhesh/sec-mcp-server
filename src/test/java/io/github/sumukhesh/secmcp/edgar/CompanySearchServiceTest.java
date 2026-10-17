@@ -9,6 +9,7 @@ import io.github.sumukhesh.secmcp.model.FilingInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import reactor.core.publisher.Mono;
@@ -57,6 +58,36 @@ class CompanySearchServiceTest {
                     assertThat(r.otherMatches()).isEmpty();
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    void formFilterFindsAnnualReportsBeyondTheTenNewestFilings() {
+        StepVerifier.create(service.search("AAPL", "10-K"))
+                .assertNext(r -> assertThat(r.recentFilings()).isNotEmpty()
+                        .allSatisfy(f -> assertThat(f.form()).isEqualTo("10-K"))
+                        .first().extracting(FilingInfo::accessionNumber).isEqualTo("0000320193-25-000079"))
+                .verifyComplete();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"10-K, 10-K", "10k, 10-K", "10 q, 10-Q", "8-K, 8-K", "8K, 8-K"})
+    void acceptsFormSpellings(String raw, String expected) {
+        assertThat(CompanySearchService.parseFormFilter(raw)).containsExactly(expected);
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"ALL", "all"})
+    void missingOrAllFormMeansEveryCoreForm(String raw) {
+        assertThat(CompanySearchService.parseFormFilter(raw)).containsExactlyInAnyOrder("10-K", "10-Q", "8-K");
+    }
+
+    @Test
+    void unsupportedFormIsRejectedWithChoices() {
+        StepVerifier.create(service.search("AAPL", "S-1"))
+                .expectErrorMessage("Unsupported form 'S-1'. Use 10-K (annual report), 10-Q (quarterly report), "
+                        + "8-K (current event) or ALL.")
+                .verify();
     }
 
     @Test

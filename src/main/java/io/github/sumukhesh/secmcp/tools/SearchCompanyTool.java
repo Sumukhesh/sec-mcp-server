@@ -28,26 +28,33 @@ public class SearchCompanyTool {
 
                     Input: 'query' is a ticker (AAPL, BRK.B), a company name (Apple, "Bank of America") \
                     or a numeric SEC CIK (320193). Write tickers in UPPERCASE; lowercase text is matched \
-                    against company names first.
+                    against company names first. Optional 'form' limits the list to one form type: use \
+                    form="10-K" when the question is about an annual report (companies file many 8-Ks, \
+                    so the latest 10-K is often not among the 10 newest filings overall).
 
                     Output: the best-matching company {cik, name, ticker}; recent_filings, the 10 most \
-                    recent 10-K (annual report), 10-Q (quarterly report) and 8-K (current event) filings, \
-                    newest first, each with form, filing_date, period_of_report and accession_number; and \
-                    other_matches, other companies that matched a partial name. If other_matches is not \
-                    empty and the company looks wrong, call again with the right ticker.
+                    recent 10-K (annual report), 10-Q (quarterly report) and 8-K (current event) filings \
+                    (or only the requested form), newest first, each with form, filing_date, \
+                    period_of_report and accession_number; and other_matches, other companies that matched \
+                    a partial name. If other_matches is not empty and the company looks wrong, call again \
+                    with the right ticker.
 
-                    Example: search_company(query="Apple") -> company {cik:"0000320193", name:"Apple Inc.", \
-                    ticker:"AAPL"}, recent_filings [{form:"10-K", filing_date:"2025-10-31", \
-                    period_of_report:"2025-09-27", accession_number:"0000320193-25-000079"}, ...].
+                    Example: search_company(query="Apple", form="10-K") -> company {cik:"0000320193", \
+                    name:"Apple Inc.", ticker:"AAPL"}, recent_filings [{form:"10-K", \
+                    filing_date:"2025-10-31", period_of_report:"2025-09-27", \
+                    accession_number:"0000320193-25-000079"}, ...].
 
-                    Only the 10 newest core filings are returned; older filings are not listed.""",
+                    At most 10 filings are returned, newest first; older ones are not listed.""",
             generateOutputSchema = true,
             annotations = @McpTool.McpAnnotations(readOnlyHint = true, idempotentHint = true, openWorldHint = true))
     public Mono<SearchCompanyResult> searchCompany(
             @McpToolParam(description = "Ticker (e.g. AAPL), company name (e.g. Apple) or SEC CIK (e.g. 320193). "
                     + "1-100 characters.", required = true)
-            String query) {
-        return searchService.search(query)
+            String query,
+            @McpToolParam(description = "Optional form filter: 10-K (annual report), 10-Q (quarterly report), "
+                    + "8-K (current event) or ALL. Default ALL.", required = false)
+            String form) {
+        return searchService.search(query, form)
                 .onErrorMap(e -> ToolErrors.toFriendly("search_company", e));
     }
 }

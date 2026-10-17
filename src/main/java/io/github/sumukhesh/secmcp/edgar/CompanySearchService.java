@@ -3,6 +3,7 @@ package io.github.sumukhesh.secmcp.edgar;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.IntStream;
 
@@ -33,6 +34,19 @@ public class CompanySearchService {
     }
 
     public Mono<SearchCompanyResult> search(String rawQuery) {
+        return search(rawQuery, null);
+    }
+
+    /**
+     * @param form optional filter: "10-K", "10-Q", "8-K" or "ALL" (default); "10K" and "10 k" also work
+     */
+    public Mono<SearchCompanyResult> search(String rawQuery, String form) {
+        Set<String> forms;
+        try {
+            forms = parseFormFilter(form);
+        } catch (IllegalArgumentException e) {
+            return Mono.error(e);
+        }
         String query = rawQuery == null ? "" : rawQuery.strip();
         if (query.isEmpty()) {
             return Mono.error(new IllegalArgumentException(
@@ -55,20 +69,38 @@ public class CompanySearchService {
                     return edgarClient.fetchSubmissions(best.cik())
                             .map(s -> new SearchCompanyResult(
                                     new CompanyInfo(best.cik().padded(), officialName(s, best), best.ticker()),
-                                    recentCoreFilings(s, MAX_FILINGS),
+                                    recentFilings(s, forms, MAX_FILINGS),
                                     others));
                 });
     }
 
+    static Set<String> parseFormFilter(String form) {
+        if (form == null || form.isBlank() || form.strip().equalsIgnoreCase("ALL")) {
+            return CORE_FORMS;
+        }
+        String normalized = form.strip().toUpperCase(Locale.ROOT).replaceAll("[\\s-]", "")
+                .replaceFirst("^(10|8)(K|Q)$", "$1-$2");
+        if (!CORE_FORMS.contains(normalized)) {
+            throw new IllegalArgumentException("Unsupported form '" + form.strip()
+                    + "'. Use 10-K (annual report), 10-Q (quarterly report), 8-K (current event) or ALL.");
+        }
+        return Set.of(normalized);
+    }
+
     /** Newest-first 10-K/10-Q/8-K filings from EDGAR's columnar "recent" arrays. */
     static List<FilingInfo> recentCoreFilings(SubmissionsResponse submissions, int limit) {
+        return recentFilings(submissions, CORE_FORMS, limit);
+    }
+
+    /** Newest-first filings of the given forms from EDGAR's columnar "recent" arrays. */
+    static List<FilingInfo> recentFilings(SubmissionsResponse submissions, Set<String> forms, int limit) {
         SubmissionsResponse.Recent r = submissions.filings() == null ? null : submissions.filings().recent();
         if (r == null || r.form() == null || r.accessionNumber() == null || r.filingDate() == null) {
             return List.of();
         }
         int n = Math.min(r.form().size(), Math.min(r.accessionNumber().size(), r.filingDate().size()));
         List<FilingInfo> filings = new ArrayList<>(IntStream.range(0, n)
-                .filter(i -> CORE_FORMS.contains(r.form().get(i)))
+                .filter(i -> forms.contains(r.form().get(i)))
                 .mapToObj(i -> new FilingInfo(r.form().get(i), r.filingDate().get(i),
                         blankToNull(r.reportDate() != null && i < r.reportDate().size() ? r.reportDate().get(i) : null),
                         r.accessionNumber().get(i)))
