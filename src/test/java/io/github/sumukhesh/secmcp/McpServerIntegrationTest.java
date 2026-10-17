@@ -21,7 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Starts the real server over Streamable HTTP and talks to it with the official MCP Java client.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "edgar.user-agent=Integration Test test@example.com")
 @ActiveProfiles("http")
 class McpServerIntegrationTest {
 

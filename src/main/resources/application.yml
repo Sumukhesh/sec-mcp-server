@@ -27,6 +27,7 @@ edgar:
   data-base-url: https://data.sec.gov    # never by a tool caller
   rate-limit-per-second: 8
   request-timeout: 30s
+  max-response-size: 52428800            # 50 MB; large 10-K HTML documents
   retry:
     max-attempts: 4
     initial-backoff: 500ms
