@@ -127,8 +127,9 @@ public class EdgarClient {
                 return new EdgarException.NotFound("SEC EDGAR has no document at " + uri.getPath());
             }
             if (status == 403) {
-                return new EdgarException("SEC EDGAR refused the request (403). Check that edgar.user-agent "
-                        + "is set to \"Your Name your@email.com\".", e);
+                // The SEC answers 403 both for a missing/invalid User-Agent and for archive paths that do not exist.
+                return new EdgarException("SEC EDGAR refused the request for " + uri.getPath() + " (403). Either the "
+                        + "document does not exist, or edgar.user-agent is not set to \"Your Name your@email.com\".", e);
             }
             return new EdgarException("SEC EDGAR returned HTTP " + status + " for " + uri.getPath(), e);
         }
