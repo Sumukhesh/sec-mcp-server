@@ -76,6 +76,33 @@ class EdgarClientTest {
     }
 
     @Test
+    void parsesRealSecFixtures() throws Exception {
+        sec.stubFor(get(TICKERS).willReturn(okJson(fixture("company_tickers.json"))));
+        sec.stubFor(get(APPLE_SUBMISSIONS).willReturn(okJson(fixture("submissions-CIK0000320193.json"))));
+
+        StepVerifier.create(client().fetchCompanyTickers())
+                .assertNext(m -> assertThat(m.values()).hasSizeGreaterThan(50)
+                        .contains(new CompanyTickerEntry(320193, "AAPL", "Apple Inc.")))
+                .verifyComplete();
+        StepVerifier.create(client().fetchSubmissions(new Cik(320193)))
+                .assertNext(s -> {
+                    assertThat(s.cik()).isEqualTo("0000320193"); // data.sec.gov returns the padded form
+                    SubmissionsResponse.Recent r = s.filings().recent();
+                    assertThat(r.form()).contains("10-K", "10-Q", "8-K")
+                            .hasSameSizeAs(r.accessionNumber())
+                            .hasSameSizeAs(r.primaryDocument())
+                            .hasSameSizeAs(r.filingDate());
+                })
+                .verifyComplete();
+    }
+
+    private static String fixture(String name) throws Exception {
+        try (var in = EdgarClientTest.class.getResourceAsStream("/fixtures/edgar/" + name)) {
+            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+    }
+
+    @Test
     void buildsArchivesUrlFromCikAccessionAndFileName() {
         String path = "/Archives/edgar/data/320193/000032019324000123/aapl-20240928.htm";
         sec.stubFor(get(path).willReturn(aResponse().withBody("<html>10-K</html>")));
