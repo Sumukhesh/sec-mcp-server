@@ -24,7 +24,7 @@ public class SearchCompanyTool {
             description = """
                     Find a US public company in SEC EDGAR and list its most recent filings. \
                     Call this FIRST whenever a question is about a specific company: it returns the \
-                    accession numbers that other tools need.
+                    ticker and accession numbers that get_filing_section needs.
 
                     Input: 'query' is a ticker (AAPL, BRK.B), a company name (Apple, "Bank of America") \
                     or a numeric SEC CIK (320193). Write tickers in UPPERCASE; lowercase text is matched \

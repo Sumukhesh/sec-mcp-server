@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.GZIPInputStream;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.modelcontextprotocol.client.McpClient;
@@ -24,6 +25,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
@@ -52,6 +54,15 @@ class McpServerIntegrationTest {
         sec.stubFor(get("/files/company_tickers.json").willReturn(okJson(fixture("company_tickers.json"))));
         sec.stubFor(get("/submissions/CIK0000320193.json")
                 .willReturn(okJson(fixture("submissions-CIK0000320193.json"))));
+        sec.stubFor(get("/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm")
+                .willReturn(aResponse().withHeader("Content-Type", "text/html").withBody(filing("aapl-20250927-10k.htm.gz"))));
+    }
+
+    private static byte[] filing(String name) throws Exception {
+        try (InputStream in = new GZIPInputStream(
+                McpServerIntegrationTest.class.getResourceAsStream("/fixtures/filings/" + name))) {
+            return in.readAllBytes();
+        }
     }
 
     private static String fixture(String name) throws Exception {
@@ -80,7 +91,7 @@ class McpServerIntegrationTest {
     void listsToolsWithSnakeCaseOutputSchema() {
         List<Tool> tools = client.listTools().tools();
 
-        assertThat(tools).extracting(Tool::name).contains("ping", "search_company");
+        assertThat(tools).extracting(Tool::name).contains("ping", "search_company", "get_filing_section");
         Tool search = tools.stream().filter(t -> t.name().equals("search_company")).findFirst().orElseThrow();
         assertThat(search.inputSchema()).extractingByKey("required")
                 .asInstanceOf(InstanceOfAssertFactories.LIST).containsExactly("query");
@@ -112,6 +123,49 @@ class McpServerIntegrationTest {
                 .containsEntry("ticker", "AAPL");
         assertThat((List<?>) content.get("recent_filings")).hasSize(10)
                 .allSatisfy(f -> assertThat(asMap(f)).containsKeys("form", "filing_date", "accession_number"));
+    }
+
+    @Test
+    void getFilingSectionSchemaListsSectionEnumAndSnakeCaseArguments() {
+        Tool tool = client.listTools().tools().stream()
+                .filter(t -> t.name().equals("get_filing_section")).findFirst().orElseThrow();
+
+        Map<String, Object> properties = asMap(tool.inputSchema().get("properties"));
+        assertThat(properties).containsKeys("section", "accession_number", "ticker", "form", "fiscal_year",
+                "offset", "limit");
+        assertThat(asMap(properties.get("section"))).extractingByKey("enum")
+                .asInstanceOf(InstanceOfAssertFactories.LIST).containsExactlyInAnyOrder("RISK_FACTORS", "MDA");
+        assertThat(tool.inputSchema()).extractingByKey("required")
+                .asInstanceOf(InstanceOfAssertFactories.LIST).containsExactly("section");
+    }
+
+    @Test
+    void searchThenReadSectionEndToEnd() {
+        CallToolResult search = client.callTool(new CallToolRequest("search_company",
+                Map.of("query", "Apple", "form", "10-K")));
+        Map<String, Object> latest = asMap(((List<?>) asMap(search.structuredContent()).get("recent_filings")).getFirst());
+
+        CallToolResult section = client.callTool(new CallToolRequest("get_filing_section", Map.of(
+                "accession_number", latest.get("accession_number"), "ticker", "AAPL",
+                "section", "RISK_FACTORS", "limit", 2000)));
+
+        assertThat(section.isError()).isNotEqualTo(Boolean.TRUE);
+        Map<String, Object> page = asMap(section.structuredContent());
+        assertThat((String) page.get("text")).startsWith("Item 1A. Risk Factors");
+        assertThat(page).containsEntry("offset", 0).containsEntry("returned_chars", 2000)
+                .containsEntry("has_more", true);
+        assertThat((Integer) page.get("total_chars")).isGreaterThan(50_000);
+        assertThat(asMap(page.get("filing"))).containsEntry("accession_number", "0000320193-25-000079")
+                .containsEntry("period_of_report", "2025-09-27");
+    }
+
+    @Test
+    void getFilingSectionReportsBadInputAsToolError() {
+        CallToolResult result = client.callTool(new CallToolRequest("get_filing_section",
+                Map.of("section", "MDA", "ticker", "AAPL", "form", "8-K")));
+
+        assertThat(result.isError()).isTrue();
+        assertThat(((TextContent) result.content().getFirst()).text()).contains("8-K filings have no Risk Factors");
     }
 
     @Test
